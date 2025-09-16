@@ -21,6 +21,13 @@ class Config:
     REQUEST_TIMEOUT = int(os.getenv('REQUEST_TIMEOUT', '30'))
     MAX_RETRIES = int(os.getenv('MAX_RETRIES', '3'))
     
+    SSL_VERIFY = os.getenv('SSL_VERIFY', 'true').lower() == 'true'
+    SSL_CERT_PATH = os.getenv('SSL_CERT_PATH')
+    SSL_CA_BUNDLE = os.getenv('SSL_CA_BUNDLE')
+    
+    PROXY_HTTP = os.getenv('PROXY_HTTP')
+    PROXY_HTTPS = os.getenv('PROXY_HTTPS')
+    
     @classmethod
     def validate(cls):
         """Validate required configuration"""

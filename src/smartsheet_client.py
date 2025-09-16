@@ -1,5 +1,7 @@
 import smartsheet
 import time
+import urllib3
+import warnings
 from typing import List, Dict, Any, Optional
 from config.settings import Config
 from utils.logger import setup_logger
@@ -10,6 +12,33 @@ class SmartsheetClient:
     def __init__(self):
         self.client = smartsheet.Smartsheet(Config.SMARTSHEET_API_TOKEN)
         self.client.errors_as_exceptions(True)
+        
+        self._configure_ssl_and_proxy()
+    
+    def _configure_ssl_and_proxy(self):
+        """Configure SSL verification and proxy settings for enterprise environments"""
+        
+        if not Config.SSL_VERIFY:
+            urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+            logger.warning("SSL verification is disabled. This is not recommended for production.")
+            self.client.session.verify = False
+        elif Config.SSL_CA_BUNDLE:
+            logger.info(f"Using custom CA bundle: {Config.SSL_CA_BUNDLE}")
+            self.client.session.verify = Config.SSL_CA_BUNDLE
+        elif Config.SSL_CERT_PATH:
+            logger.info(f"Using SSL certificate: {Config.SSL_CERT_PATH}")
+            self.client.session.verify = Config.SSL_CERT_PATH
+        
+        proxies = {}
+        if Config.PROXY_HTTP:
+            proxies['http'] = Config.PROXY_HTTP
+            logger.info(f"Using HTTP proxy: {Config.PROXY_HTTP}")
+        if Config.PROXY_HTTPS:
+            proxies['https'] = Config.PROXY_HTTPS
+            logger.info(f"Using HTTPS proxy: {Config.PROXY_HTTPS}")
+        
+        if proxies:
+            self.client.session.proxies.update(proxies)
         
     def get_workspace_info(self) -> Dict[str, Any]:
         """Get workspace information and metadata"""

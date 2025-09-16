@@ -4,5 +4,9 @@ smartsheet-python-sdk>=3.0.0
 # Environment variables
 python-dotenv>=1.0.0
 
+# SSL/HTTP handling
+urllib3>=2.0.0
+requests>=2.31.0
+
 # Utilities
 pathlib2>=2.3.7; python_version < '3.4'
