@@ -1,0 +1,8 @@
+# Smartsheet API
+smartsheet-python-sdk>=3.0.0
+
+# Environment variables
+python-dotenv>=1.0.0
+
+# Utilities
+pathlib2>=2.3.7; python_version < '3.4'
