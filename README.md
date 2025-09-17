@@ -73,6 +73,7 @@ WORKSPACE_ID=your_workspace_id_here
 LOG_LEVEL=INFO
 REQUEST_TIMEOUT=30
 MAX_RETRIES=3
+SECURITY_MODE=enterprise  # Use 'testing' to relax SSL/proxy checks for local development
 ```
 
 ### 3. Get Your Smartsheet Credentials
@@ -97,6 +98,9 @@ python main.py validate
 # Full sync of all sheets
 python main.py sync
 
+# Full sync with relaxed enterprise security for testing
+python main.py sync --security-mode testing
+
 # Sync specific sheets by ID
 python main.py sync --sheets 1234567890 9876543210
 
@@ -116,6 +120,17 @@ python main.py status --format json
 
 # Human-readable table format (default)
 python main.py status --format table
+
+```
+
+### Enterprise Security Toggle
+
+```bash
+# Run commands with enterprise-grade SSL and proxy enforcement (default)
+python main.py sync --security-mode enterprise
+
+# Temporarily disable SSL verification and proxy usage for troubleshooting
+python main.py validate --security-mode testing
 ```
 
 ## Data Structure
@@ -189,8 +204,11 @@ for row in sheet_data['rows']:
 ```python
 from src.sync_manager import SyncManager
 
-# Initialize
+# Initialize (defaults to enterprise security mode)
 sync_manager = SyncManager()
+
+# Or explicitly relax security controls while testing
+# sync_manager = SyncManager(security_mode='testing')
 
 # Sync all data
 result = sync_manager.full_sync()
@@ -225,6 +243,7 @@ All configuration is in `config/settings.py` and can be overridden with environm
 | `LOG_LEVEL` | Logging level | `INFO` |
 | `REQUEST_TIMEOUT` | API request timeout (seconds) | `30` |
 | `MAX_RETRIES` | Maximum retry attempts | `3` |
+| `SECURITY_MODE` | `enterprise` for full SSL/proxy checks, `testing` to relax them | `enterprise` |
 
 ## Troubleshooting
 

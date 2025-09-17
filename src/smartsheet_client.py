@@ -1,23 +1,41 @@
 import smartsheet
 import time
 import urllib3
-import warnings
 from typing import List, Dict, Any, Optional
 from config.settings import Config
 from utils.logger import setup_logger
 
 logger = setup_logger(__name__)
 
+ALLOWED_SECURITY_MODES = {'enterprise', 'testing'}
+
+
 class SmartsheetClient:
-    def __init__(self):
+    def __init__(self, security_mode: Optional[str] = None):
+        self.security_mode = self._resolve_security_mode(security_mode)
         self.client = smartsheet.Smartsheet(Config.SMARTSHEET_API_TOKEN)
         self.client.errors_as_exceptions(True)
         
         self._configure_ssl_and_proxy()
     
+    def _resolve_security_mode(self, override: Optional[str]) -> str:
+        if override:
+            candidate = override.strip().lower()
+            if candidate in ALLOWED_SECURITY_MODES:
+                return candidate
+            logger.warning(f"Unrecognized security mode '{override}', defaulting to config value")
+        return Config.SECURITY_MODE
+    
     def _configure_ssl_and_proxy(self):
         """Configure SSL verification and proxy settings for enterprise environments"""
         
+        if self.security_mode == 'testing':
+            urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+            logger.warning("Enterprise SSL and proxy settings disabled (testing mode)")
+            self.client.session.verify = False
+            self.client.session.proxies.clear()
+            return
+
         if not Config.SSL_VERIFY:
             urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
             logger.warning("SSL verification is disabled. This is not recommended for production.")

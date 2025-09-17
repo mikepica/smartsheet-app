@@ -27,6 +27,14 @@ class Config:
     
     PROXY_HTTP = os.getenv('PROXY_HTTP')
     PROXY_HTTPS = os.getenv('PROXY_HTTPS')
+
+    _SECURITY_MODE_ENV = os.getenv('SECURITY_MODE', 'enterprise').strip().lower()
+    SECURITY_MODE = _SECURITY_MODE_ENV if _SECURITY_MODE_ENV in {'enterprise', 'testing'} else 'enterprise'
+
+    @classmethod
+    def is_testing_security_mode(cls) -> bool:
+        """Return True when enterprise security should be relaxed (testing mode)"""
+        return cls.SECURITY_MODE == 'testing'
     
     @classmethod
     def validate(cls):

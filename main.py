@@ -31,6 +31,12 @@ Examples:
   python main.py cleanup --keep 5       # Clean up old files
         """
     )
+    parser.add_argument(
+        '--security-mode',
+        choices=['enterprise', 'testing'],
+        default=Config.SECURITY_MODE,
+        help="Toggle enterprise SSL and proxy enforcement. Use 'testing' to relax checks for local testing."
+    )
     
     subparsers = parser.add_subparsers(dest='command', help='Available commands')
     
@@ -81,7 +87,7 @@ Examples:
         Config.validate()
         
         # Initialize sync manager
-        sync_manager = SyncManager()
+        sync_manager = SyncManager(security_mode=args.security_mode)
         
         if args.command == 'sync':
             handle_sync_command(sync_manager, args)

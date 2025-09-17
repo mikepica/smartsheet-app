@@ -1,5 +1,6 @@
 import time
 from typing import Dict, Any, List, Optional
+from config.settings import Config
 from src.smartsheet_client import SmartsheetClient
 from src.json_storage import JSONStorage
 from utils.logger import setup_logger
@@ -7,8 +8,10 @@ from utils.logger import setup_logger
 logger = setup_logger(__name__)
 
 class SyncManager:
-    def __init__(self):
-        self.smartsheet_client = SmartsheetClient()
+    def __init__(self, security_mode: Optional[str] = None):
+        self.smartsheet_client = SmartsheetClient(security_mode=security_mode or Config.SECURITY_MODE)
+        self.security_mode = self.smartsheet_client.security_mode
+        logger.info(f"SyncManager initialized with security mode: {self.security_mode}")
         self.storage = JSONStorage()
         
     def full_sync(self) -> Dict[str, Any]:
