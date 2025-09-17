@@ -1,7 +1,9 @@
 import smartsheet
 import time
 import urllib3
-from typing import List, Dict, Any, Optional
+import ssl
+import requests
+from typing import List, Dict, Any, Optional, Generator
 from config.settings import Config
 from utils.logger import setup_logger
 
@@ -15,8 +17,27 @@ class SmartsheetClient:
         self.security_mode = self._resolve_security_mode(security_mode)
         self.client = smartsheet.Smartsheet(Config.SMARTSHEET_API_TOKEN)
         self.client.errors_as_exceptions(True)
+        self._http_session: requests.Session = self._get_http_session()
         
         self._configure_ssl_and_proxy()
+
+    def _get_http_session(self) -> requests.Session:
+        """Return the underlying requests session, supporting both public and private Smartsheet attributes"""
+        session = getattr(self.client, 'session', None)
+        if session is None:
+            session = getattr(self.client, '_session', None)
+        if session is None:
+            raise AttributeError("Smartsheet client does not expose an HTTP session accessor")
+        return session
+    
+    def _serialize_value(self, value):
+        """Convert Smartsheet objects to JSON-serializable values"""
+        if hasattr(value, 'name'):  # EnumeratedValue objects have a 'name' attribute
+            return value.name
+        elif hasattr(value, '__dict__'):  # Other complex objects
+            return str(value)
+        else:
+            return value
     
     def _resolve_security_mode(self, override: Optional[str]) -> str:
         if override:
@@ -32,20 +53,33 @@ class SmartsheetClient:
         if self.security_mode == 'testing':
             urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
             logger.warning("Enterprise SSL and proxy settings disabled (testing mode)")
-            self.client.session.verify = False
-            self.client.session.proxies.clear()
+            self._http_session.verify = False
+            self._http_session.proxies.clear()
             return
 
         if not Config.SSL_VERIFY:
             urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
             logger.warning("SSL verification is disabled. This is not recommended for production.")
-            self.client.session.verify = False
+            self._http_session.verify = False
+            # Create a custom HTTPSAdapter that doesn't verify hostnames
+            from requests.adapters import HTTPAdapter
+            from urllib3.util.ssl_ import create_urllib3_context
+            
+            class NoSSLVerifyHTTPSAdapter(HTTPAdapter):
+                def init_poolmanager(self, *args, **pool_kwargs):
+                    context = create_urllib3_context()
+                    context.check_hostname = False
+                    context.verify_mode = ssl.CERT_NONE
+                    pool_kwargs['ssl_context'] = context
+                    return super().init_poolmanager(*args, **pool_kwargs)
+            
+            self._http_session.mount('https://', NoSSLVerifyHTTPSAdapter())
         elif Config.SSL_CA_BUNDLE:
             logger.info(f"Using custom CA bundle: {Config.SSL_CA_BUNDLE}")
-            self.client.session.verify = Config.SSL_CA_BUNDLE
+            self._http_session.verify = Config.SSL_CA_BUNDLE
         elif Config.SSL_CERT_PATH:
             logger.info(f"Using SSL certificate: {Config.SSL_CERT_PATH}")
-            self.client.session.verify = Config.SSL_CERT_PATH
+            self._http_session.verify = Config.SSL_CERT_PATH
         
         proxies = {}
         if Config.PROXY_HTTP:
@@ -56,7 +90,7 @@ class SmartsheetClient:
             logger.info(f"Using HTTPS proxy: {Config.PROXY_HTTPS}")
         
         if proxies:
-            self.client.session.proxies.update(proxies)
+            self._http_session.proxies.update(proxies)
         
     def get_workspace_info(self) -> Dict[str, Any]:
         """Get workspace information and metadata"""
@@ -74,7 +108,7 @@ class SmartsheetClient:
         except Exception as e:
             logger.error(f"Error fetching workspace info: {e}")
             raise
-    
+
     def get_all_sheets_in_workspace(self) -> List[Dict[str, Any]]:
         """Get list of all sheets in the workspace"""
         try:
@@ -95,7 +129,7 @@ class SmartsheetClient:
                     'permalink': sheet.permalink,
                     'created_at': sheet.created_at.isoformat() if sheet.created_at else None,
                     'modified_at': sheet.modified_at.isoformat() if sheet.modified_at else None,
-                    'access_level': sheet.access_level
+                    'access_level': self._serialize_value(sheet.access_level)
                 }
                 sheets_info.append(sheet_info)
             
@@ -133,7 +167,7 @@ class SmartsheetClient:
                     column_data = {
                         'id': column.id,
                         'title': column.title,
-                        'type': column.type,
+                        'type': self._serialize_value(column.type),
                         'primary': column.primary,
                         'index': column.index,
                         'width': column.width,
@@ -157,8 +191,8 @@ class SmartsheetClient:
                         for cell in row.cells:
                             column_id = str(cell.column_id)
                             cell_data = {
-                                'value': cell.value,
-                                'display_value': cell.display_value,
+                                'value': self._serialize_value(cell.value),
+                                'display_value': self._serialize_value(cell.display_value),
                                 'formula': cell.formula
                             }
                             row_data['cells'][column_id] = cell_data
@@ -171,8 +205,8 @@ class SmartsheetClient:
         except Exception as e:
             logger.error(f"Error fetching sheet {sheet_id}: {e}")
             raise
-    
-    def fetch_all_workspace_data(self) -> Dict[str, Any]:
+
+    def fetch_all_workspace_data(self) -> Generator[Dict[str, Any], None, None]:
         """Fetch all data from workspace including metadata and all sheets"""
         try:
             logger.info("Starting full workspace data fetch")
